@@ -10,7 +10,9 @@
 */
 
 #include "Config.h"
-
+#include "ScriptMgr.h"
+#include "Chat.h"
+#include "Player.h"
 
 class AccountAchievements : public PlayerScript
 {
@@ -24,15 +26,15 @@ public:
 
 	void OnLogin(Player* pPlayer)
 	{
-		if (sConfigMgr->GetBoolDefault("Account.Achievements.Enable", true))
+		if (sConfigMgr->GetOption<bool>("Account.Achievements.Enable", true))
         {
-			if (sConfigMgr->GetBoolDefault("Account.Achievements.Announce", true))
+			if (sConfigMgr->GetOption<bool>("Account.Achievements.Announce", true))
             {
                 ChatHandler(pPlayer->GetSession()).SendSysMessage("This server is running the |cff4CFF00AccountAchievements |rmodule.");
             }
-			
+
 			std::vector<uint32> Guids;
-			QueryResult result1 = CharacterDatabase.PQuery("SELECT guid, race FROM characters WHERE account = %u", pPlayer->GetSession()->GetAccountId());
+			QueryResult result1 = CharacterDatabase.Query("SELECT guid, race FROM characters WHERE account = {}", pPlayer->GetSession()->GetAccountId());
 			if (!result1)
 				return;
 
@@ -40,11 +42,10 @@ public:
 			{
 				Field* fields = result1->Fetch();
 
-				uint32 guid = fields[0].GetUInt32();
-				uint32 race = fields[1].GetUInt8();
+				uint32 race = fields[1].Get<uint8>();
 
 				if ((Player::TeamIdForRace(race) == Player::TeamIdForRace(pPlayer->getRace())) || !limitrace)
-					Guids.push_back(result1->Fetch()[0].GetUInt32());
+					Guids.push_back(result1->Fetch()[0].Get<uint32>());
 
 			} while (result1->NextRow());
 
@@ -52,13 +53,13 @@ public:
 
 			for (auto& i : Guids)
 			{
-				QueryResult result2 = CharacterDatabase.PQuery("SELECT achievement FROM character_achievement WHERE guid = %u", i);
+				QueryResult result2 = CharacterDatabase.Query("SELECT achievement FROM character_achievement WHERE guid = {}", i);
 				if (!result2)
 					continue;
 
 				do
 				{
-					Achievement.push_back(result2->Fetch()[0].GetUInt32());
+					Achievement.push_back(result2->Fetch()[0].Get<uint32>());
 				} while (result2->NextRow());
 			}
 
@@ -69,43 +70,21 @@ public:
 			}
 		}
 	}
-		
+
 	void AddAchievements(Player* player, uint32 AchievementID)
 	{
-		if (sConfigMgr->GetBoolDefault("Account.Achievements.Enable", true))
+		if (sConfigMgr->GetOption<bool>("Account.Achievements.Enable", true))
         {
 			if (limitlevel)
 				setlevel = minlevel;
 
-			if (player->getLevel() >= setlevel)
+			if (player->GetLevel() >= setlevel)
 				player->CompletedAchievement(sAchievementStore.LookupEntry(AchievementID));
-		}
-	}
-};
-
-class AccountAchievementsWorld : public WorldScript
-{
-public:
-	AccountAchievementsWorld() : WorldScript("AccountAchievementsWorld") { }
-
-	void OnBeforeConfigLoad(bool reload) override
-	{
-		if (!reload) {
-			std::string conf_path = _CONF_DIR;
-			std::string cfg_file = conf_path + "/mod_achievements.conf";
-#ifdef WIN32
-			cfg_file = "mod_achievements.conf";
-#endif
-			std::string cfg_def_file = cfg_file + ".dist";
-			sConfigMgr->LoadMore(cfg_def_file.c_str());
-
-			sConfigMgr->LoadMore(cfg_file.c_str());
 		}
 	}
 };
 
 void AddAccountAchievementsScripts()
 {
-	new AccountAchievementsWorld;
 	new AccountAchievements;
 }
